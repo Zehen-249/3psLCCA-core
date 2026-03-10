@@ -23,7 +23,7 @@ class StageCostCalculator:
         self.inflation_rate = general["inflation_rate_percent"]
 
         self.initial_construction_cost = program_inputs["initial_construction_cost"]
-        self.initial_carbon_cost = program_inputs["material_carbon_emissions_cost"]
+        self.initial_carbon_cost = program_inputs["initial_carbon_emissions_cost"]
         self.cost_of_super_structure = program_inputs[
             "superstructure_construction_cost"
         ]
