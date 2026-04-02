@@ -46,8 +46,7 @@ def calculate_total_adjusted_costs(a, Traffic_Input, debug=False):
     #     v.get("vehicles_per_day", 0) * v_const.pcu.get(vt)
     #     for vt, v in vehicle_data.items()
     # )
-    total_daily_pcu = calculate_total_pcu(vehicle_data, debug=debug)[
-        "total_daily_pcu"]
+    total_daily_pcu = calculate_total_pcu(vehicle_data, debug=debug)["total_daily_pcu"]
 
     # 3. State Definitions
     peak_hours_count = len(hourly_dist)
@@ -63,29 +62,34 @@ def calculate_total_adjusted_costs(a, Traffic_Input, debug=False):
         vc_cal = hourly_pcu_vol / h_capacity
         vc_considered = min(vc_cal, 1.0)
 
-        states.append({
-            "id": f"Peak_Hour_{i+1}",
-            "vc_cal": vc_cal,
-            "vc_considered": vc_considered,
-            "share": hourly_percent,
-            "is_peak": True
-        })
+        states.append(
+            {
+                "id": f"Peak_Hour_{i+1}",
+                "vc_cal": vc_cal,
+                "vc_considered": vc_considered,
+                "share": hourly_percent,
+                "is_peak": True,
+            }
+        )
 
     # Off-Peak Period
     if off_peak_duration > 0:
         off_peak_hourly_pcu = (
-            total_daily_pcu * off_peak_share_total) / off_peak_duration
+            total_daily_pcu * off_peak_share_total
+        ) / off_peak_duration
 
         vc_cal = off_peak_hourly_pcu / h_capacity
         vc_considered = min(vc_cal, 1.0)
 
-        states.append({
-            "id": "Off_Peak_Period",
-            "vc_cal": vc_cal,
-            "vc_considered": vc_considered,
-            "share": off_peak_share_total,
-            "is_peak": False
-        })
+        states.append(
+            {
+                "id": "Off_Peak_Period",
+                "vc_cal": vc_cal,
+                "vc_considered": vc_considered,
+                "share": off_peak_share_total,
+                "is_peak": False,
+            }
+        )
 
     # 4. Aggregation Loop
     total_dist_cost = {c.IT: 0.0, c.ET: 0.0}
@@ -101,9 +105,9 @@ def calculate_total_adjusted_costs(a, Traffic_Input, debug=False):
             t_factors = {v: 1.0 for v in input_vehicles + ["buses"]}
         else:
             d_factors = cf.distance_congestion_factors(
-                lane_type, vc=state["vc_considered"])
-            t_factors = cf.time_congestion_factors(
-                lane_type, vc=state["vc_considered"])
+                lane_type, vc=state["vc_considered"]
+            )
+            t_factors = cf.time_congestion_factors(lane_type, vc=state["vc_considered"])
 
         state_result = {
             "state": state["id"],
@@ -111,31 +115,36 @@ def calculate_total_adjusted_costs(a, Traffic_Input, debug=False):
             "v_c_considered": round(state["vc_considered"], 4),
             "traffic_share": state["share"],
             "free_flow_applied": (not state["is_peak"] and force_free_flow),
-            "vehicle_impacts": {}
+            "vehicle_impacts": {},
         }
 
         for v_key in input_vehicles:
             formula_key = "buses" if v_key in ["o_buses", "d_buses"] else v_key
-            base_cost_key = v_key if v_key in a['distanceCost'] else (
-                formula_key if formula_key in a['distanceCost'] else None)
+            base_cost_key = (
+                v_key
+                if v_key in a["distanceCost"]
+                else (formula_key if formula_key in a["distanceCost"] else None)
+            )
 
-            if base_cost_key is None or vehicle_data[v_key].get("vehicles_per_day", 0) == 0:
+            if (
+                base_cost_key is None
+                or vehicle_data[v_key].get("vehicles_per_day", 0) == 0
+            ):
                 continue
 
             cd = d_factors.get(formula_key, 1.0)
             ct = t_factors.get(formula_key, 1.0)
-            share_of_vehicles = vehicle_data[v_key]["vehicles_per_day"] * \
-                state["share"]
+            share_of_vehicles = vehicle_data[v_key]["vehicles_per_day"] * state["share"]
 
             # Cost Calculations
-            cost_dist_it = (a['distanceCost'][base_cost_key]
-                            [c.IT] * cd) * share_of_vehicles
-            cost_dist_et = (a['distanceCost'][base_cost_key]
-                            [c.ET] * cd) * share_of_vehicles
-            cost_time_it = (a['timeCost'][base_cost_key]
-                            [c.IT] * ct) * share_of_vehicles
-            cost_time_et = (a['timeCost'][base_cost_key]
-                            [c.ET] * ct) * share_of_vehicles
+            cost_dist_it = (
+                a["distanceCost"][base_cost_key][c.IT] * cd
+            ) * share_of_vehicles
+            cost_dist_et = (
+                a["distanceCost"][base_cost_key][c.ET] * cd
+            ) * share_of_vehicles
+            cost_time_it = (a["timeCost"][base_cost_key][c.IT] * ct) * share_of_vehicles
+            cost_time_et = (a["timeCost"][base_cost_key][c.ET] * ct) * share_of_vehicles
 
             total_dist_cost[c.IT] += cost_dist_it
             total_dist_cost[c.ET] += cost_dist_et
@@ -145,20 +154,31 @@ def calculate_total_adjusted_costs(a, Traffic_Input, debug=False):
             if debug:
                 state_result["vehicle_impacts"][v_key] = {
                     "factors": {"dist": round(cd, 4), "time": round(ct, 4)},
-                    "weighted_costs": {"dist_it": round(cost_dist_it, 2), "time_it": round(cost_time_it, 2)}
+                    "weighted_costs": {
+                        "dist_it": round(cost_dist_it, 2),
+                        "dist_et": round(cost_dist_et, 2),
+                        "time_it": round(cost_time_it, 2),
+                        "time_et": round(cost_time_et, 2),
+                    },
                 }
 
         if debug:
             temporal_breakdown.append(state_result)
 
     result = {
-        "distance_total": total_dist_cost, "time_total": total_time_cost,
-        "total": {c.IT: total_dist_cost[c.IT] + total_time_cost[c.IT], c.ET: total_dist_cost[c.ET] + total_time_cost[c.ET]},
-        "unit": "Rs/km"
+        "distance_total": total_dist_cost,
+        "time_total": total_time_cost,
+        "total": {
+            c.IT: total_dist_cost[c.IT] + total_time_cost[c.IT],
+            c.ET: total_dist_cost[c.ET] + total_time_cost[c.ET],
+        },
+        "unit": "Rs/km",
     }
 
     if debug:
-        dump_to_file("ruc-congestion-voc-4-Post_congestion_VOC.json",
-                     {"summary": result, "temporal_steps": temporal_breakdown})
+        dump_to_file(
+            "ruc-congestion-voc-4-Post_congestion_VOC.json",
+            {"summary": result, "temporal_steps": temporal_breakdown},
+        )
 
     return result
